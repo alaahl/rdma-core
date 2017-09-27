@@ -5,7 +5,7 @@ set -e
 # be verbose
 set -x
 
-for OS in centos7 opensuse-42.2
+for OS in centos7 opensuse-42.2 artful
 do
 	echo
 	echo "Checking package build for ${OS} ...."
