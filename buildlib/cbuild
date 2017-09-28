@@ -415,13 +415,15 @@ def run_rpm_build(args,spec_file,env):
 
     image_id = get_image_id(args,env.image_name());
     with private_tmp(args) as tmpdir:
-        os.mkdir(os.path.join(tmpdir,"SOURCES"));
+        builddir = os.path.join(tmpdir,"builddir")
+        os.mkdir(builddir);
+        os.mkdir(os.path.join(builddir,"SOURCES"));
         os.mkdir(os.path.join(tmpdir,"tmp"));
 
         subprocess.check_call(["git","archive",
                                # This must match the prefix generated buildlib/github-release
                                "--prefix","%s-%s/"%(project,get_version()),
-                               "--output",os.path.join(tmpdir,"SOURCES",tarfn),
+                               "--output",os.path.join(builddir,"SOURCES",tarfn),
                                "HEAD"]);
 
         with open(spec_file,"r") as inF:
@@ -431,17 +433,20 @@ def run_rpm_build(args,spec_file,env):
             outF.write("".join(spec));
 
         home = os.path.join(os.path.sep,"home",os.getenv("LOGNAME"));
-        vdir = os.path.join(home,"rpmbuild");
 
         opts = [
             "run",
             "--rm=true",
-            "-v","%s:%s"%(tmpdir,vdir),
-            "-w",vdir,
+            "-v","%s:%s"%(tmpdir,home),
+            "-w",home,
             "-h","builder-%s"%(image_id[:12]),
             "-e","HOME=%s"%(home),
-            "-e","TMPDIR=%s"%(os.path.join(vdir,"tmp")),
+            "-e","TMPDIR=%s"%(os.path.join(home,"tmp")),
         ];
+
+        # set _topdir for rpmbuild under SUSE since it's different than RedHat
+        with open(os.path.join(tmpdir,".rpmmacros"),"w") as F:
+            print >> F,"%%_topdir %s"%os.path.join(home,"builddir")
 
         # rpmbuild complains if we do not have an entry in passwd and group
         # for the user we are going to use to do the build.
@@ -459,7 +464,7 @@ os.setuid({uid:d});
 for ln in subprocess.check_output(["rpmspec","-P",{tspec_file!r}]).splitlines():
    if ln.startswith("Source:"):
       tarfn = ln.strip().partition(' ')[2].strip();
-os.symlink({tarfn!r},os.path.join("SOURCES",tarfn));
+os.symlink({tarfn!r},os.path.join("builddir","SOURCES",tarfn));
 """.format(passwd=":".join(str(I) for I in pwd.getpwuid(os.getuid())),
            group=":".join(str(I) for I in grp.getgrgid(os.getgid())),
            uid=os.getuid(),
